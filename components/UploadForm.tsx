@@ -178,7 +178,7 @@ export function UploadForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="mt-10 space-y-6 rounded-3xl bg-accent/80 p-6 shadow-sm ring-1 ring-primary/30 sm:p-8"
+      className="mt-10 space-y-6 rounded-3xl bg-accent/80 p-7 shadow-sm ring-1 ring-primary/30 sm:p-8"
     >
       <div className="space-y-2">
         <label

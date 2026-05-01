@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, DM_Sans } from "next/font/google";
 
 import "./globals.css";
@@ -18,6 +18,10 @@ export const metadata: Metadata = {
   title: "Alexandru & Elisabeta — Încărcare fotografii",
   description:
     "Împărtășește momentele tale preferate de la nunta noastră.",
+};
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
