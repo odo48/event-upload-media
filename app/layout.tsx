@@ -16,8 +16,7 @@ const sans = DM_Sans({
 
 export const metadata: Metadata = {
   title: "Alexandru & Elisabeta — Încărcare fotografii",
-  description:
-    "Împărtășește momentele tale preferate de la nunta noastră.",
+  description: "Împărtășește momentele tale preferate de la nunta noastră.",
 };
 
 export const viewport: Viewport = {
@@ -31,9 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ro" className={`${display.variable} h-full`}>
-      <body
-        className={`${sans.className} min-h-full bg-background text-text antialiased`}
-      >
+      <body className={`${sans.className} bg-background text-text antialiased`}>
         {children}
       </body>
     </html>
