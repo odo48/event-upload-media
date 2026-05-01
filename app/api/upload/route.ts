@@ -8,7 +8,7 @@ import {
   uploadReadableToDrive,
 } from "@/lib/googleDrive";
 import { isAllowedMediaMime } from "@/lib/mime";
-import { sanitizeFileName } from "@/lib/sanitizeFileName";
+import { buildDriveFileName, sanitizeFileName } from "@/lib/sanitizeFileName";
 import { checkUploadRateLimit, getClientIp } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
@@ -75,14 +75,15 @@ export async function POST(request: NextRequest) {
           }
 
           const mime = info.mimeType || "application/octet-stream";
-          const safeName = sanitizeFileName(info.filename);
+          const safeBase = sanitizeFileName(info.filename);
+          const driveFileName = buildDriveFileName(guestName, safeBase);
 
           if (!isAllowedMediaMime(mime)) {
             file.resume();
             pipeline = pipeline.then(() => {
               outcomes.push({
                 ok: false,
-                name: safeName,
+                name: driveFileName,
                 error: "UNSUPPORTED_TYPE",
               });
             });
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
             try {
               const uploaded = await uploadReadableToDrive({
                 readable: file as Readable,
-                originalName: safeName,
+                originalName: driveFileName,
                 mimeType: mime,
                 description: descriptionParts.join(" · "),
               });
@@ -110,15 +111,15 @@ export async function POST(request: NextRequest) {
               if (raw.includes("limit") || raw.includes("LIMIT")) {
                 outcomes.push({
                   ok: false,
-                  name: safeName,
+                  name: driveFileName,
                   error: "FILE_TOO_LARGE",
                 });
               } else {
                 const { clientCode, logLine } = classifyDriveUploadError(err);
-                console.error("[drive upload]", safeName, logLine, err);
+                console.error("[drive upload]", driveFileName, logLine, err);
                 outcomes.push({
                   ok: false,
-                  name: safeName,
+                  name: driveFileName,
                   error: clientCode,
                 });
               }
