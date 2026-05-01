@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { ProgressBar } from "@/components/ProgressBar";
 
@@ -27,7 +21,7 @@ export function UploadForm() {
   const [guestName, setGuestName] = useState("");
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">(
-    "idle",
+    "idle"
   );
   const [message, setMessage] = useState<string | null>(null);
   const [lastResults, setLastResults] = useState<ServerResult[] | null>(null);
@@ -55,7 +49,9 @@ export function UploadForm() {
         if (file.size > MAX_CLIENT_BYTES) {
           setStatus("error");
           setMessage(
-            `"${file.name}" is too large. Each file must be under ${humanBytes(MAX_CLIENT_BYTES)}.`,
+            `"${file.name}" is too large. Each file must be under ${humanBytes(
+              MAX_CLIENT_BYTES
+            )}.`
           );
           return;
         }
@@ -118,7 +114,8 @@ export function UploadForm() {
           setStatus("error");
 
           const map: Record<string, string> = {
-            FILE_TOO_LARGE: "A file exceeded the limit. Keep each clip under 200MB.",
+            FILE_TOO_LARGE:
+              "A file exceeded the limit. Keep each clip under 200MB.",
             RATE_LIMITED: "Slow down a touch — try again shortly.",
             NO_FILES: "Add at least one file before uploading.",
           };
@@ -138,7 +135,7 @@ export function UploadForm() {
             setMessage(
               results.length === 1
                 ? "Thank you! Your upload is tucked away safely."
-                : `Thank you! ${results.length} uploads landed safely.`,
+                : `Thank you! ${results.length} uploads landed safely.`
             );
             inputRef.current!.value = "";
             return;
@@ -161,13 +158,14 @@ export function UploadForm() {
 
       xhr.send(formData);
     },
-    [guestName],
+    [guestName]
   );
 
   const busy = status === "uploading";
   const helper = useMemo(
-    () => "JPEG, PNG, HEIC, MP4, MOV, and other common phone formats are welcome.",
-    [],
+    () =>
+      "JPEG, PNG, HEIC, MP4, MOV, and other common phone formats are welcome.",
+    []
   );
 
   return (
@@ -191,7 +189,7 @@ export function UploadForm() {
           value={guestName}
           disabled={busy}
           onChange={(e) => setGuestName(e.target.value)}
-          placeholder="e.g. Jordan"
+          placeholder="e.g. Raluca"
           className="w-full rounded-2xl border border-primary/40 bg-background px-4 py-3 text-base text-text shadow-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/40 disabled:opacity-60"
         />
       </div>
@@ -263,7 +261,7 @@ export function UploadForm() {
               <li key={`${r.name}-${r.error}`}>
                 Could not upload {r.name}: {friendlyError(r.error)}
               </li>
-            ) : null,
+            ) : null
           )}
         </ul>
       ) : null}
