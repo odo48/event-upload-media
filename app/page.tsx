@@ -10,21 +10,21 @@ export default function Home() {
     <div className="min-h-full bg-gradient-to-b from-background via-accent/30 to-background">
       <main className="mx-auto flex max-w-lg flex-col px-5 pb-16 pt-12 sm:px-8 sm:pt-16">
         <h1 className="mt-2 text-center font-[family-name:var(--font-display)] text-4xl font-semibold leading-tight text-text sm:text-5xl">
-          Alex &amp; Eli
+          Alexandru &amp; Elisabeta
         </h1>
         <p className="mt-4 text-center text-lg text-text/75">
-          Upload your photos
+          Încarcă fotografiile tale
         </p>
         <p className="mt-2 text-center text-sm leading-relaxed text-text/60">
-          Drop the candid moments, dance-floor clips, and quiet smiles here. We
-          will treasure every single one.
+          Lasă aici momentele spontane, clipurile de pe ring și zâmbetele
+          discrete. Le vom păstra cu drag pe toate.
         </p>
 
         <UploadForm />
 
         <section className="mt-14 space-y-4 text-center">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-text/55">
-            Scan to open
+            Scanează pentru a deschide
           </h2>
           <div className="flex justify-center">
             <Suspense

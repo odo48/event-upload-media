@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-primary: #e8cfc5;
-  --color-secondary: #dde5d8;
-  --color-accent: #f5efea;
+  /* Verde salvie pastel — culoarea principală (butoane, accent, bare de progres) */
+  --color-primary: #a3be9f;
+  --color-secondary: #dae6da;
+  --color-accent: #f2f5f2;
   --color-background: #faf8f6;
   --color-text: #4a4a4a;
 }

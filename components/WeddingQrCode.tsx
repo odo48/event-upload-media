@@ -34,11 +34,12 @@ export async function WeddingQrCode() {
         {url}
       </p>
       <p className="text-center text-[11px] text-text/50">
-        Tip: point guests to exactly this URL (set{" "}
+        Sfat: invitații trebuie să folosească exact această adresă (în producție,
+        setează{" "}
         <code className="rounded-md bg-accent px-1 py-px text-[10px]">
           NEXT_PUBLIC_SITE_URL
-        </code>{" "}
-        in production).
+        </code>
+        ).
       </p>
     </div>
   );

@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json(
       { error: "SERVER_MISCONFIGURED" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 
@@ -60,17 +60,15 @@ export async function POST(request: NextRequest) {
 
       bb.on("field", (fieldname, value) => {
         if (fieldname === "guestName") {
-          guestName = String(value ?? "").trim().slice(0, 200);
+          guestName = String(value ?? "")
+            .trim()
+            .slice(0, 200);
         }
       });
 
       bb.on(
         "file",
-        (
-          fieldname,
-          file,
-          info: { filename: string; mimeType?: string },
-        ) => {
+        (fieldname, file, info: { filename: string; mimeType?: string }) => {
           if (fieldname !== "files") {
             file.resume();
             return;
@@ -91,8 +89,8 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          const descriptionParts = ["Alex & Eli wedding gallery"];
-          if (guestName) descriptionParts.unshift(`Guest: ${guestName}`);
+          const descriptionParts = ["Galerie fotografii — Alexandru & Elisabeta"];
+          if (guestName) descriptionParts.unshift(`Invitat: ${guestName}`);
 
           pipeline = pipeline.then(async () => {
             try {
@@ -108,8 +106,7 @@ export async function POST(request: NextRequest) {
                 name: uploaded.name,
               });
             } catch (err) {
-              const raw =
-                err instanceof Error ? err.message : String(err);
+              const raw = err instanceof Error ? err.message : String(err);
               if (raw.includes("limit") || raw.includes("LIMIT")) {
                 outcomes.push({
                   ok: false,
@@ -127,7 +124,7 @@ export async function POST(request: NextRequest) {
               }
             }
           });
-        },
+        }
       );
 
       bb.on("filesLimit", () => {
@@ -147,7 +144,7 @@ export async function POST(request: NextRequest) {
       });
 
       const nodeReadable = Readable.fromWeb(
-        request.body as unknown as import("stream/web").ReadableStream,
+        request.body as unknown as import("stream/web").ReadableStream
       );
       nodeReadable.once("error", reject);
       nodeReadable.pipe(bb);
@@ -156,14 +153,14 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : "PARSE_ERROR";
     return NextResponse.json(
       { error: "PARSE_FAILED", detail: message },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
   if (limitExceeded) {
     return NextResponse.json(
       { error: "FILE_TOO_LARGE", results: outcomes },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -174,6 +171,6 @@ export async function POST(request: NextRequest) {
   const allOk = outcomes.every((o) => o.ok);
   return NextResponse.json(
     { results: outcomes },
-    { status: allOk ? 200 : 207 },
+    { status: allOk ? 200 : 207 }
   );
 }

@@ -21,7 +21,7 @@ export function UploadForm() {
   const [guestName, setGuestName] = useState("");
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">(
-    "idle"
+    "idle",
   );
   const [message, setMessage] = useState<string | null>(null);
   const [lastResults, setLastResults] = useState<ServerResult[] | null>(null);
@@ -40,7 +40,7 @@ export function UploadForm() {
       const list = input?.files;
       if (!list || list.length === 0) {
         setStatus("error");
-        setMessage("Choose at least one photo or video to share.");
+        setMessage("Alege cel puțin o fotografie sau un clip video.");
         return;
       }
 
@@ -49,16 +49,13 @@ export function UploadForm() {
         if (file.size > MAX_CLIENT_BYTES) {
           setStatus("error");
           setMessage(
-            `"${file.name}" is too large. Each file must be under ${humanBytes(
-              MAX_CLIENT_BYTES
-            )}.`
+            `„${file.name}” este prea mare. Fiecare fișier trebuie să fie sub ${humanBytes(MAX_CLIENT_BYTES)}.`,
           );
           return;
         }
       }
 
       const formData = new FormData();
-      // Put guest name first so the server parses it before file parts.
       formData.append("guestName", guestName.trim());
       for (const file of files) {
         formData.append("files", file, file.name);
@@ -83,7 +80,9 @@ export function UploadForm() {
 
       xhr.onerror = () => {
         setStatus("error");
-        setMessage("Network error. Check your connection and try again.");
+        setMessage(
+          "Problemă de rețea. Verifică conexiunea și încearcă din nou.",
+        );
         setProgress(0);
       };
 
@@ -94,13 +93,15 @@ export function UploadForm() {
           payload = JSON.parse(xhr.responseText || "{}");
         } catch {
           setStatus("error");
-          setMessage("Unexpected server response. Please try again.");
+          setMessage("Răspuns neașteptat de la server. Încearcă din nou.");
           return;
         }
 
         if (xhr.status === 429) {
           setStatus("error");
-          setMessage("Too many uploads right now. Please wait a few minutes.");
+          setMessage(
+            "Prea multe încărcări acum — așteaptă câteva minute și încearcă din nou.",
+          );
           return;
         }
 
@@ -115,12 +116,18 @@ export function UploadForm() {
 
           const map: Record<string, string> = {
             FILE_TOO_LARGE:
-              "A file exceeded the limit. Keep each clip under 200MB.",
-            RATE_LIMITED: "Slow down a touch — try again shortly.",
-            NO_FILES: "Add at least one file before uploading.",
+              "Un fișier depășește limita permisă. Maximum 200 MB per fișier.",
+            RATE_LIMITED:
+              "Prea multe încărcări în scurt timp — încearcă din nou puțin mai târziu.",
+            NO_FILES:
+              "Adaugă cel puțin un fișier înainte să apeși Încarcă.",
           };
 
-          setMessage(map[body.error ?? ""] ?? body.detail ?? "Upload failed.");
+          setMessage(
+            map[body.error ?? ""] ??
+              body.detail ??
+              "Încărcarea nu a reușit.",
+          );
           return;
         }
 
@@ -134,8 +141,8 @@ export function UploadForm() {
             setStatus("done");
             setMessage(
               results.length === 1
-                ? "Thank you! Your upload is tucked away safely."
-                : `Thank you! ${results.length} uploads landed safely.`
+                ? "Îți mulțumim! Am primit fotografia și e în siguranță."
+                : `Îți mulțumim! Am primit cele ${results.length} încărcări în siguranță.`,
             );
             inputRef.current!.value = "";
             return;
@@ -144,8 +151,8 @@ export function UploadForm() {
           const failed = results.filter((r) => !r.ok);
           const summary =
             okCount > 0
-              ? `${okCount} of ${results.length} uploaded. The rest need another try.`
-              : `${failed.length}/${results.length} file(s) need another try`;
+              ? `${okCount} din ${results.length} au fost încărcate. Celelalte trebuie încercate din nou.`
+              : `${failed.length} din ${results.length} fișiere nu s-au încărcat`;
           const detail = failed.map((r) => r.name).join(", ");
           setStatus("error");
           setMessage(`${summary}${detail ? `: ${detail}` : ""}`);
@@ -153,19 +160,19 @@ export function UploadForm() {
         }
 
         setStatus("error");
-        setMessage("Upload failed. Please try again.");
+        setMessage("Încărcarea nu a reușit. Încearcă din nou.");
       };
 
       xhr.send(formData);
     },
-    [guestName]
+    [guestName],
   );
 
   const busy = status === "uploading";
   const helper = useMemo(
     () =>
-      "JPEG, PNG, HEIC, MP4, MOV, and other common phone formats are welcome.",
-    []
+      "Sunt binevenite JPEG, PNG, HEIC, MP4, MOV și alte formate uzuale de pe telefon.",
+    [],
   );
 
   return (
@@ -178,7 +185,7 @@ export function UploadForm() {
           htmlFor="guestName"
           className="block text-sm font-medium text-text/80"
         >
-          Your name <span className="text-text/50">(optional)</span>
+          Numele tău <span className="text-text/50">(opțional)</span>
         </label>
         <input
           id="guestName"
@@ -189,7 +196,7 @@ export function UploadForm() {
           value={guestName}
           disabled={busy}
           onChange={(e) => setGuestName(e.target.value)}
-          placeholder="e.g. Raluca"
+          placeholder="De ex.: Maria"
           className="w-full rounded-2xl border border-primary/40 bg-background px-4 py-3 text-base text-text shadow-sm outline-none transition focus:border-secondary focus:ring-2 focus:ring-secondary/40 disabled:opacity-60"
         />
       </div>
@@ -199,7 +206,7 @@ export function UploadForm() {
           htmlFor="files"
           className="block text-sm font-medium text-text/80"
         >
-          Photos &amp; videos
+          Fotografii și clipuri video
         </label>
         <input
           id="files"
@@ -218,7 +225,11 @@ export function UploadForm() {
       {busy ? (
         <ProgressBar
           value={progress}
-          label={progress < 8 ? "Starting upload…" : "Sending your memories…"}
+          label={
+            progress < 8
+              ? "Pornim încărcarea…"
+              : "Trimitem amintirile tale…"
+          }
         />
       ) : null}
 
@@ -233,10 +244,10 @@ export function UploadForm() {
               className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-text/30 border-t-text"
               aria-hidden
             />
-            Uploading…
+            Se încarcă…
           </>
         ) : (
-          "Upload"
+          "Încarcă"
         )}
       </button>
 
@@ -259,9 +270,10 @@ export function UploadForm() {
           {lastResults.map((r) =>
             !r.ok ? (
               <li key={`${r.name}-${r.error}`}>
-                Could not upload {r.name}: {friendlyError(r.error)}
+                Nu s-a putut încărca „{r.name}”:{" "}
+                {friendlyError(r.error)}
               </li>
-            ) : null
+            ) : null,
           )}
         </ul>
       ) : null}
@@ -272,20 +284,21 @@ export function UploadForm() {
 function friendlyError(code: string): string {
   const map: Record<string, string> = {
     UNSUPPORTED_TYPE:
-      "this format is blocked on the server. Try another clip or HEIC/JPEG.",
-    FILE_TOO_LARGE: "this file tipped past our 200MB limit.",
+      "serverul nu acceptă acest tip de fișier. Încearcă JPEG sau alt format obișnuit.",
+    FILE_TOO_LARGE:
+      "fișierul depășește limita de 200 MB.",
     UPLOAD_FAILED:
-      "the cloud handshake hiccuped. Retry once you have stronger signal.",
+      "s-a întrerupt comunicarea cu stocarea. Încearcă cu semnal mai bun.",
     DRIVE_PERMISSION_DENIED:
-      "Google Drive refused access — share your upload folder with the service account email (Editor) or check the OAuth project.",
+      "Google Drive a refuzat accesul — verifică partajarea folderului sau proiectul OAuth.",
     DRIVE_FOLDER_NOT_FOUND:
-      "Drive folder ID is wrong or inaccessible. Double-check GOOGLE_DRIVE_FOLDER_ID.",
+      "ID-ul folderului e greșit sau inaccesibil. Verifică GOOGLE_DRIVE_FOLDER_ID.",
     DRIVE_API_DISABLED:
-      "Enable Google Drive API for your Cloud project (APIs & Services → Library).",
+      "Activează „Google Drive API” în Console (APIs & Services → Library).",
     DRIVE_QUOTA_OR_STORAGE:
-      "Quota or storage limit hit (folder owner or Drive storage).",
+      "limită de spațiu sau cote — verifică stocarea contului Drive.",
     DRIVE_BAD_CREDENTIALS:
-      "Service account key or email is wrong — check GOOGLE_PRIVATE_KEY (with \\n) and GOOGLE_CLIENT_EMAIL.",
+      "cheia OAuth sau contul serviciu e greșit — verifică variabilele din .env.",
   };
   return map[code] ?? code;
 }

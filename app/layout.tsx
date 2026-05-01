@@ -15,8 +15,9 @@ const sans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Alex & Eli — Photo Upload",
-  description: "Share your favorite moments from our celebration.",
+  title: "Alexandru & Elisabeta — Încărcare fotografii",
+  description:
+    "Împărtășește momentele tale preferate de la nunta noastră.",
 };
 
 export default function RootLayout({
@@ -25,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${display.variable} h-full`}>
+    <html lang="ro" className={`${display.variable} h-full`}>
       <body
         className={`${sans.className} min-h-full bg-background text-text antialiased`}
       >
