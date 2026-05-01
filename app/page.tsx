@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export default function Home() {
   return (
-    <div className="relative h-scree flex justify-center items-center">
+    <div className="relative h-screen flex justify-center items-center">
       <div aria-hidden className="pointer-events-none fixed inset-0 z-[-1]">
         <div className="absolute inset-0 bg-background" />
         <div
