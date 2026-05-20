@@ -63,7 +63,11 @@ export function UploadForm() {
         if (file.size > MAX_FILE_BYTES) {
           setStatus("error");
           setMessage(
-            `„${file.name}” este prea mare. Fiecare fișier trebuie să fie sub ${humanBytes(MAX_FILE_BYTES)}.`,
+            `„${
+              file.name
+            }” este prea mare. Fiecare fișier trebuie să fie sub ${humanBytes(
+              MAX_FILE_BYTES
+            )}.`
           );
           return;
         }
@@ -173,14 +177,16 @@ export function UploadForm() {
   const busy = status === "uploading";
   const helper = useMemo(
     () =>
-      `Sunt binevenite JPEG, PNG, HEIC, MP4, MOV și alte formate uzuale. Până la ${humanBytes(MAX_FILE_BYTES)} per fișier.`,
-    [],
+      `JPEG, PNG, HEIC, MP4, MOV etc. Până la ${humanBytes(
+        MAX_FILE_BYTES
+      )} per fișier.`,
+    []
   );
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="mt-10 space-y-6 rounded-3xl bg-accent/80 p-7 shadow-sm ring-1 ring-primary/30 sm:p-8"
+      className="mt-10 space-y-3 rounded-3xl bg-accent/80 p-7 shadow-sm ring-1 ring-primary/30 sm:p-8"
     >
       <div className="space-y-2">
         <label
@@ -223,6 +229,17 @@ export function UploadForm() {
         />
         <p className="text-xs text-text/60">{helper}</p>
       </div>
+
+      <p
+        className={`rounded-2xl border px-4 py-3 text-xs leading-relaxed transition ${
+          busy
+            ? "border-primary/50 bg-primary/20 text-text"
+            : "border-primary/30 bg-background/60 text-text/70"
+        }`}
+      >
+        Ține telefonul deschis și aplicația vizibilă până se termină încărcarea
+        — dacă ecranul intră în sleep, transferul se oprește.
+      </p>
 
       {busy ? (
         <ProgressBar
@@ -440,7 +457,9 @@ function friendlyError(code: string): string {
   const map: Record<string, string> = {
     UNSUPPORTED_TYPE:
       "serverul nu acceptă acest tip de fișier. Încearcă JPEG sau alt format obișnuit.",
-    FILE_TOO_LARGE: `fișierul depășește limita de ${humanBytes(MAX_FILE_BYTES)}.`,
+    FILE_TOO_LARGE: `fișierul depășește limita de ${humanBytes(
+      MAX_FILE_BYTES
+    )}.`,
     RATE_LIMITED:
       "prea multe încărcări în scurt timp. Așteaptă câteva minute și încearcă din nou.",
     UPLOAD_FAILED:
