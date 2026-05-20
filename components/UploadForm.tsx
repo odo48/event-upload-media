@@ -1,12 +1,30 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from "react";
 
 import { ProgressBar } from "@/components/ProgressBar";
+import { fireUploadConfetti } from "@/lib/celebrateUpload";
 
 type ServerResult =
   | { ok: true; id: string; name: string }
   | { ok: false; name: string; error: string };
+
+type FileUploadItem = {
+  key: string;
+  name: string;
+  size: number;
+  progress: number;
+  status: "pending" | "uploading" | "done" | "error";
+  error?: string;
+};
 
 const MAX_CLIENT_BYTES = 200 * 1024 * 1024;
 
@@ -21,20 +39,22 @@ export function UploadForm() {
   const [guestName, setGuestName] = useState("");
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">(
-    "idle",
+    "idle"
   );
   const [message, setMessage] = useState<string | null>(null);
   const [lastResults, setLastResults] = useState<ServerResult[] | null>(null);
+  const [uploadItems, setUploadItems] = useState<FileUploadItem[]>([]);
 
   const resetStatus = useCallback(() => {
     setStatus("idle");
     setMessage(null);
     setProgress(0);
     setLastResults(null);
+    setUploadItems([]);
   }, []);
 
   const handleSubmit = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const input = inputRef.current;
       const list = input?.files;
@@ -49,130 +69,122 @@ export function UploadForm() {
         if (file.size > MAX_CLIENT_BYTES) {
           setStatus("error");
           setMessage(
-            `„${file.name}” este prea mare. Fiecare fișier trebuie să fie sub ${humanBytes(MAX_CLIENT_BYTES)}.`,
+            `„${
+              file.name
+            }” este prea mare. Fiecare fișier trebuie să fie sub ${humanBytes(
+              MAX_CLIENT_BYTES
+            )}.`
           );
           return;
         }
-      }
-
-      const formData = new FormData();
-      formData.append("guestName", guestName.trim());
-      for (const file of files) {
-        formData.append("files", file, file.name);
       }
 
       setStatus("uploading");
       setMessage(null);
       setProgress(0);
       setLastResults(null);
+      setUploadItems(
+        files.map((file, index) => ({
+          key: fileKey(file, index),
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          status: "pending",
+        }))
+      );
 
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/upload");
+      const totalBytes = Math.max(
+        1,
+        files.reduce((sum, file) => sum + file.size, 0)
+      );
+      const results: ServerResult[] = [];
+      let completedBytes = 0;
 
-      xhr.upload.onprogress = (evt) => {
-        if (!evt.lengthComputable) {
-          setProgress(50);
-          return;
-        }
-        const pct = (evt.loaded / evt.total) * 100;
-        setProgress(pct);
-      };
+      for (const [index, file] of files.entries()) {
+        const key = fileKey(file, index);
+        updateUploadItem(setUploadItems, key, {
+          status: "uploading",
+          progress: 0,
+          error: undefined,
+        });
 
-      xhr.onerror = () => {
-        setStatus("error");
-        setMessage(
-          "Problemă de rețea. Verifică conexiunea și încearcă din nou.",
-        );
-        setProgress(0);
-      };
-
-      xhr.onload = () => {
-        setProgress(100);
-        let payload: unknown;
         try {
-          payload = JSON.parse(xhr.responseText || "{}");
+          const uploaded = await uploadSingleFile({
+            file,
+            guestName,
+            completedBytes,
+            totalBytes,
+            onOverallProgress: setProgress,
+            onFileProgress: (value) => {
+              updateUploadItem(setUploadItems, key, { progress: value });
+            },
+          });
+          results.push(...uploaded);
+          const failed = uploaded.filter((result) => !result.ok);
+          updateUploadItem(
+            setUploadItems,
+            key,
+            failed.length > 0
+              ? {
+                  status: "error",
+                  progress: 100,
+                  error: failed.map((result) => result.error).join(", "),
+                }
+              : { status: "done", progress: 100, error: undefined }
+          );
         } catch {
-          setStatus("error");
-          setMessage("Răspuns neașteptat de la server. Încearcă din nou.");
-          return;
+          results.push({
+            ok: false,
+            name: file.name,
+            error: "UPLOAD_FAILED",
+          });
+          updateUploadItem(setUploadItems, key, {
+            status: "error",
+            progress: 100,
+            error: "UPLOAD_FAILED",
+          });
+        } finally {
+          completedBytes += file.size;
+          setLastResults([...results]);
         }
+      }
 
-        if (xhr.status === 429) {
-          setStatus("error");
-          setMessage(
-            "Prea multe încărcări acum — așteaptă câteva minute și încearcă din nou.",
-          );
-          return;
-        }
+      setProgress(100);
+      const allOk = results.every((r) => r.ok);
+      const okCount = results.filter((r) => r.ok).length;
 
-        if (
-          xhr.status >= 400 &&
-          typeof payload === "object" &&
-          payload &&
-          "error" in payload
-        ) {
-          const body = payload as { error?: string; detail?: string };
-          setStatus("error");
+      if (allOk) {
+        setStatus("done");
+        setMessage(
+          results.length === 1
+            ? "Îți mulțumim! Am primit fotografia și e în siguranță."
+            : `Îți mulțumim! Am primit cele ${results.length} încărcări în siguranță.`
+        );
+        if (inputRef.current) inputRef.current.value = "";
+        setUploadItems((items) =>
+          items.map((item) => ({ ...item, status: "done", progress: 100 }))
+        );
+        fireUploadConfetti();
+        return;
+      }
 
-          const map: Record<string, string> = {
-            FILE_TOO_LARGE:
-              "Un fișier depășește limita permisă. Maximum 200 MB per fișier.",
-            RATE_LIMITED:
-              "Prea multe încărcări în scurt timp — încearcă din nou puțin mai târziu.",
-            NO_FILES:
-              "Adaugă cel puțin un fișier înainte să apeși Încarcă.",
-          };
-
-          setMessage(
-            map[body.error ?? ""] ??
-              body.detail ??
-              "Încărcarea nu a reușit.",
-          );
-          return;
-        }
-
-        if (typeof payload === "object" && payload && "results" in payload) {
-          const results = (payload as { results: ServerResult[] }).results;
-          setLastResults(results);
-          const allOk = results.every((r) => r.ok);
-          const okCount = results.filter((r) => r.ok).length;
-
-          if (allOk && xhr.status < 400) {
-            setStatus("done");
-            setMessage(
-              results.length === 1
-                ? "Îți mulțumim! Am primit fotografia și e în siguranță."
-                : `Îți mulțumim! Am primit cele ${results.length} încărcări în siguranță.`,
-            );
-            inputRef.current!.value = "";
-            return;
-          }
-
-          const failed = results.filter((r) => !r.ok);
-          const summary =
-            okCount > 0
-              ? `${okCount} din ${results.length} au fost încărcate. Celelalte trebuie încercate din nou.`
-              : `${failed.length} din ${results.length} fișiere nu s-au încărcat`;
-          const detail = failed.map((r) => r.name).join(", ");
-          setStatus("error");
-          setMessage(`${summary}${detail ? `: ${detail}` : ""}`);
-          return;
-        }
-
-        setStatus("error");
-        setMessage("Încărcarea nu a reușit. Încearcă din nou.");
-      };
-
-      xhr.send(formData);
+      const failed = results.filter((r) => !r.ok);
+      const summary =
+        okCount > 0
+          ? `${okCount} din ${results.length} au fost încărcate. Celelalte trebuie încercate din nou.`
+          : `${failed.length} din ${results.length} fișiere nu s-au încărcat`;
+      const detail = failed.map((r) => r.name).join(", ");
+      setStatus("error");
+      setMessage(`${summary}${detail ? `: ${detail}` : ""}`);
     },
-    [guestName],
+    [guestName]
   );
 
   const busy = status === "uploading";
   const helper = useMemo(
     () =>
       "Sunt binevenite JPEG, PNG, HEIC, MP4, MOV și alte formate uzuale de pe telefon.",
-    [],
+    []
   );
 
   return (
@@ -226,11 +238,67 @@ export function UploadForm() {
         <ProgressBar
           value={progress}
           label={
-            progress < 8
-              ? "Pornim încărcarea…"
-              : "Trimitem amintirile tale…"
+            progress < 8 ? "Pornim încărcarea…" : "Trimitem amintirile tale…"
           }
         />
+      ) : null}
+
+      {uploadItems.length > 0 ? (
+        <ul
+          className="max-h-32 space-y-3 overflow-y-auto overscroll-contain rounded-2xl pr-1"
+          aria-label="Starea fișierelor selectate"
+        >
+          {uploadItems.map((item) => (
+            <li
+              key={item.key}
+              className="rounded-2xl border border-primary/25 bg-background/70 p-3 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-text">
+                    {item.name}
+                  </p>
+                  <p className="text-xs text-text/55">
+                    {humanBytes(item.size)}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                    item.status === "done"
+                      ? "bg-secondary/50 text-text"
+                      : item.status === "error"
+                      ? "bg-rose-100 text-rose-900"
+                      : item.status === "uploading"
+                      ? "bg-primary/50 text-text"
+                      : "bg-text/10 text-text/70"
+                  }`}
+                >
+                  {uploadStatusLabel(item.status)}
+                </span>
+              </div>
+              <div
+                className="mt-3 h-2 overflow-hidden rounded-full bg-text/10"
+                aria-hidden
+              >
+                <div
+                  className={`h-full rounded-full transition-all duration-200 ${
+                    item.status === "error" ? "bg-rose-400" : "bg-secondary"
+                  }`}
+                  style={{
+                    width: `${
+                      item.progress === 0 ? 0 : Math.max(4, item.progress)
+                    }%`,
+                  }}
+                />
+              </div>
+              {item.error ? (
+                <p className="mt-2 text-xs leading-relaxed text-rose-900">
+                  Nu s-a putut încărca: {friendlyError(item.error)}
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       ) : null}
 
       <button
@@ -265,15 +333,16 @@ export function UploadForm() {
         </div>
       ) : null}
 
-      {lastResults && lastResults.some((r) => !r.ok) ? (
+      {lastResults &&
+      uploadItems.length === 0 &&
+      lastResults.some((r) => !r.ok) ? (
         <ul className="space-y-1 text-xs text-text/70">
           {lastResults.map((r) =>
             !r.ok ? (
               <li key={`${r.name}-${r.error}`}>
-                Nu s-a putut încărca „{r.name}”:{" "}
-                {friendlyError(r.error)}
+                Nu s-a putut încărca „{r.name}”: {friendlyError(r.error)}
               </li>
-            ) : null,
+            ) : null
           )}
         </ul>
       ) : null}
@@ -281,12 +350,126 @@ export function UploadForm() {
   );
 }
 
+function uploadSingleFile(options: {
+  file: File;
+  guestName: string;
+  completedBytes: number;
+  totalBytes: number;
+  onOverallProgress: (value: number) => void;
+  onFileProgress: (value: number) => void;
+}): Promise<ServerResult[]> {
+  const {
+    file,
+    guestName,
+    completedBytes,
+    totalBytes,
+    onOverallProgress,
+    onFileProgress,
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append("guestName", guestName.trim());
+    formData.append("files", file, file.name);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
+
+    xhr.upload.onprogress = (evt) => {
+      const loaded = evt.lengthComputable ? evt.loaded : file.size / 2;
+      const filePct = file.size > 0 ? (loaded / file.size) * 100 : 100;
+      const pct = ((completedBytes + loaded) / totalBytes) * 100;
+      onFileProgress(Math.min(99, filePct));
+      onOverallProgress(Math.min(99, pct));
+    };
+
+    xhr.onerror = () => {
+      reject(new Error("NETWORK_ERROR"));
+    };
+
+    xhr.onload = () => {
+      let payload: unknown = null;
+      try {
+        payload = JSON.parse(xhr.responseText || "{}");
+      } catch {
+        if (xhr.status === 413) {
+          resolve([{ ok: false, name: file.name, error: "REQUEST_TOO_LARGE" }]);
+          return;
+        }
+        reject(new Error("UNEXPECTED_RESPONSE"));
+        return;
+      }
+
+      if (xhr.status === 429) {
+        resolve([{ ok: false, name: file.name, error: "RATE_LIMITED" }]);
+        return;
+      }
+
+      if (
+        xhr.status >= 400 &&
+        typeof payload === "object" &&
+        payload &&
+        "error" in payload
+      ) {
+        const body = payload as { error?: string };
+        resolve([
+          {
+            ok: false,
+            name: file.name,
+            error:
+              body.error === "FUNCTION_PAYLOAD_TOO_LARGE"
+                ? "REQUEST_TOO_LARGE"
+                : body.error ?? "UPLOAD_FAILED",
+          },
+        ]);
+        return;
+      }
+
+      if (typeof payload === "object" && payload && "results" in payload) {
+        resolve((payload as { results: ServerResult[] }).results);
+        return;
+      }
+
+      reject(new Error("UNEXPECTED_RESPONSE"));
+    };
+
+    xhr.send(formData);
+  });
+}
+
+function fileKey(file: File, index: number): string {
+  return `${file.name}-${file.size}-${file.lastModified}-${index}`;
+}
+
+function updateUploadItem(
+  setUploadItems: Dispatch<SetStateAction<FileUploadItem[]>>,
+  key: string,
+  patch: Partial<FileUploadItem>
+) {
+  setUploadItems((items) =>
+    items.map((item) => (item.key === key ? { ...item, ...patch } : item))
+  );
+}
+
+function uploadStatusLabel(status: FileUploadItem["status"]): string {
+  const map: Record<FileUploadItem["status"], string> = {
+    pending: "În așteptare",
+    uploading: "Se încarcă",
+    done: "Încărcat",
+    error: "Eroare",
+  };
+  return map[status];
+}
+
 function friendlyError(code: string): string {
   const map: Record<string, string> = {
     UNSUPPORTED_TYPE:
       "serverul nu acceptă acest tip de fișier. Încearcă JPEG sau alt format obișnuit.",
-    FILE_TOO_LARGE:
-      "fișierul depășește limita de 200 MB.",
+    FILE_TOO_LARGE: "fișierul depășește limita de 200 MB.",
+    REQUEST_TOO_LARGE:
+      "fișierul este prea mare pentru limita Vercel. Alege o variantă mai mică.",
+    RATE_LIMITED:
+      "prea multe încărcări în scurt timp. Așteaptă câteva minute și încearcă din nou.",
     UPLOAD_FAILED:
       "s-a întrerupt comunicarea cu stocarea. Încearcă cu semnal mai bun.",
     DRIVE_PERMISSION_DENIED:
