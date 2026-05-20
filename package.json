@@ -10,6 +10,7 @@
     "qr": "node scripts/generate-qr.mjs"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "busboy": "^1.6.0",
     "canvas-confetti": "^1.9.4",
     "googleapis": "^171.4.0",
