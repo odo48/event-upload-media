@@ -406,7 +406,8 @@ async function uploadSingleFile(options: {
       },
     });
     return [{ ok: true, id: uploaded.id, name: uploaded.name }];
-  } catch {
+  } catch (err) {
+    console.error("[upload] resumable PUT failed", file.name, err);
     return [{ ok: false, name: driveName, error: "UPLOAD_FAILED" }];
   }
 }

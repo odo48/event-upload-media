@@ -149,6 +149,8 @@ export async function createResumableUploadSession(options: {
   mimeType: string;
   size: number;
   description?: string;
+  /** Browser origin — passed to Google so the returned upload URL allows CORS PUTs. */
+  origin?: string;
 }): Promise<{ uploadUrl: string }> {
   const token = await getAccessToken();
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID!;
@@ -161,16 +163,21 @@ export async function createResumableUploadSession(options: {
     metadata.description = options.description.slice(0, 8000);
   }
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json; charset=UTF-8",
+    "X-Upload-Content-Type": options.mimeType,
+    "X-Upload-Content-Length": String(options.size),
+  };
+  if (options.origin) {
+    headers.Origin = options.origin;
+  }
+
   const res = await fetch(
     "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json; charset=UTF-8",
-        "X-Upload-Content-Type": options.mimeType,
-        "X-Upload-Content-Length": String(options.size),
-      },
+      headers,
       body: JSON.stringify(metadata),
     },
   );

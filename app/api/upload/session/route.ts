@@ -66,12 +66,23 @@ export async function POST(request: NextRequest) {
   const descriptionParts = ["Galerie fotografii — Alexandru & Elisabeta"];
   if (guestName) descriptionParts.unshift(`Invitat: ${guestName}`);
 
+  const origin =
+    request.headers.get("origin") ??
+    (() => {
+      try {
+        return new URL(request.url).origin;
+      } catch {
+        return undefined;
+      }
+    })();
+
   try {
     const { uploadUrl } = await createResumableUploadSession({
       name: driveFileName,
       mimeType,
       size,
       description: descriptionParts.join(" · "),
+      origin,
     });
 
     return NextResponse.json({ uploadUrl, name: driveFileName });
