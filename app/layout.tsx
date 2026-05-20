@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, DM_Sans } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 
 import "./globals.css";
 
@@ -32,6 +33,7 @@ export default function RootLayout({
     <html lang="ro" className={`${display.variable} h-full`}>
       <body className={`${sans.className} bg-background text-text antialiased`}>
         {children}
+        <Analytics />
       </body>
     </html>
   );
