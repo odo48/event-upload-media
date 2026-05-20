@@ -37,19 +37,22 @@ export function assertDriveConfigured(): void {
   }
 }
 
-async function resolveDrive(): Promise<ReturnType<typeof google.drive>> {
+type DriveAuth =
+  | InstanceType<typeof google.auth.OAuth2>
+  | InstanceType<typeof google.auth.JWT>;
+
+let cachedAuth: DriveAuth | null = null;
+
+async function resolveAuth(): Promise<DriveAuth> {
   assertDriveConfigured();
   const mode = describeDriveAuthMode()!;
 
-  if (cachedDrive && cachedMode === mode) {
-    return cachedDrive;
+  if (cachedAuth && cachedMode === mode) {
+    return cachedAuth;
   }
 
+  cachedAuth = null;
   cachedDrive = null;
-
-  let cachedAuth:
-    | InstanceType<typeof google.auth.OAuth2>
-    | InstanceType<typeof google.auth.JWT>;
 
   if (mode === "oauth") {
     const oauth = new google.auth.OAuth2(
@@ -66,9 +69,30 @@ async function resolveDrive(): Promise<ReturnType<typeof google.drive>> {
     cachedAuth = jwt;
   }
 
-  cachedDrive = google.drive({ version: "v3", auth: cachedAuth });
   cachedMode = mode;
+  return cachedAuth;
+}
+
+async function resolveDrive(): Promise<ReturnType<typeof google.drive>> {
+  const mode = describeDriveAuthMode()!;
+
+  if (cachedDrive && cachedMode === mode) {
+    return cachedDrive;
+  }
+
+  cachedDrive = google.drive({ version: "v3", auth: await resolveAuth() });
   return cachedDrive;
+}
+
+async function getAccessToken(): Promise<string> {
+  const auth = await resolveAuth();
+  const tokenResponse = await auth.getAccessToken();
+  const token =
+    typeof tokenResponse === "string"
+      ? tokenResponse
+      : tokenResponse?.token;
+  if (!token) throw new Error("NO_ACCESS_TOKEN");
+  return token;
 }
 
 function createJwtClient(): InstanceType<typeof google.auth.JWT> {
@@ -115,4 +139,66 @@ export async function uploadReadableToDrive(options: {
   if (!id) throw new Error("DRIVE_NO_FILE_ID");
 
   return { id, name: res.data.name ?? options.originalName };
+}
+
+/**
+ * Starts a Drive resumable upload; client PUTs bytes directly to uploadUrl (bypasses app host body limits).
+ */
+export async function createResumableUploadSession(options: {
+  name: string;
+  mimeType: string;
+  size: number;
+  description?: string;
+}): Promise<{ uploadUrl: string }> {
+  const token = await getAccessToken();
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID!;
+
+  const metadata: Record<string, unknown> = {
+    name: options.name,
+    parents: [folderId],
+  };
+  if (options.description) {
+    metadata.description = options.description.slice(0, 8000);
+  }
+
+  const res = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": options.mimeType,
+        "X-Upload-Content-Length": String(options.size),
+      },
+      body: JSON.stringify(metadata),
+    },
+  );
+
+  if (!res.ok) {
+    let apiError: unknown;
+    try {
+      apiError = await res.json();
+    } catch {
+      apiError = { message: await res.text() };
+    }
+    const err = new Error("RESUMABLE_INIT_FAILED") as Error & {
+      response?: { status: number; data?: { error?: unknown } };
+    };
+    err.response = {
+      status: res.status,
+      data: {
+        error:
+          typeof apiError === "object" && apiError && "error" in apiError
+            ? (apiError as { error: unknown }).error
+            : apiError,
+      },
+    };
+    throw err;
+  }
+
+  const uploadUrl = res.headers.get("Location");
+  if (!uploadUrl) throw new Error("RESUMABLE_NO_LOCATION");
+
+  return { uploadUrl };
 }

@@ -12,6 +12,8 @@ import {
 
 import { ProgressBar } from "@/components/ProgressBar";
 import { fireUploadConfetti } from "@/lib/celebrateUpload";
+import { uploadFileViaResumableUrl } from "@/lib/uploadToDriveResumable";
+import { humanBytes, MAX_FILE_BYTES } from "@/lib/uploadLimits";
 
 type ServerResult =
   | { ok: true; id: string; name: string }
@@ -25,14 +27,6 @@ type FileUploadItem = {
   status: "pending" | "uploading" | "done" | "error";
   error?: string;
 };
-
-const MAX_CLIENT_BYTES = 200 * 1024 * 1024;
-
-function humanBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export function UploadForm() {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -66,14 +60,10 @@ export function UploadForm() {
 
       const files = Array.from(list);
       for (const file of files) {
-        if (file.size > MAX_CLIENT_BYTES) {
+        if (file.size > MAX_FILE_BYTES) {
           setStatus("error");
           setMessage(
-            `„${
-              file.name
-            }” este prea mare. Fiecare fișier trebuie să fie sub ${humanBytes(
-              MAX_CLIENT_BYTES
-            )}.`
+            `„${file.name}” este prea mare. Fiecare fișier trebuie să fie sub ${humanBytes(MAX_FILE_BYTES)}.`,
           );
           return;
         }
@@ -183,8 +173,8 @@ export function UploadForm() {
   const busy = status === "uploading";
   const helper = useMemo(
     () =>
-      "Sunt binevenite JPEG, PNG, HEIC, MP4, MOV și alte formate uzuale de pe telefon.",
-    []
+      `Sunt binevenite JPEG, PNG, HEIC, MP4, MOV și alte formate uzuale. Până la ${humanBytes(MAX_FILE_BYTES)} per fișier.`,
+    [],
   );
 
   return (
@@ -350,7 +340,7 @@ export function UploadForm() {
   );
 }
 
-function uploadSingleFile(options: {
+async function uploadSingleFile(options: {
   file: File;
   guestName: string;
   completedBytes: number;
@@ -367,74 +357,58 @@ function uploadSingleFile(options: {
     onFileProgress,
   } = options;
 
-  return new Promise((resolve, reject) => {
-    const formData = new FormData();
-    formData.append("guestName", guestName.trim());
-    formData.append("files", file, file.name);
+  const mimeType = file.type || "application/octet-stream";
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/upload");
-
-    xhr.upload.onprogress = (evt) => {
-      const loaded = evt.lengthComputable ? evt.loaded : file.size / 2;
-      const filePct = file.size > 0 ? (loaded / file.size) * 100 : 100;
-      const pct = ((completedBytes + loaded) / totalBytes) * 100;
-      onFileProgress(Math.min(99, filePct));
-      onOverallProgress(Math.min(99, pct));
-    };
-
-    xhr.onerror = () => {
-      reject(new Error("NETWORK_ERROR"));
-    };
-
-    xhr.onload = () => {
-      let payload: unknown = null;
-      try {
-        payload = JSON.parse(xhr.responseText || "{}");
-      } catch {
-        if (xhr.status === 413) {
-          resolve([{ ok: false, name: file.name, error: "REQUEST_TOO_LARGE" }]);
-          return;
-        }
-        reject(new Error("UNEXPECTED_RESPONSE"));
-        return;
-      }
-
-      if (xhr.status === 429) {
-        resolve([{ ok: false, name: file.name, error: "RATE_LIMITED" }]);
-        return;
-      }
-
-      if (
-        xhr.status >= 400 &&
-        typeof payload === "object" &&
-        payload &&
-        "error" in payload
-      ) {
-        const body = payload as { error?: string };
-        resolve([
-          {
-            ok: false,
-            name: file.name,
-            error:
-              body.error === "FUNCTION_PAYLOAD_TOO_LARGE"
-                ? "REQUEST_TOO_LARGE"
-                : body.error ?? "UPLOAD_FAILED",
-          },
-        ]);
-        return;
-      }
-
-      if (typeof payload === "object" && payload && "results" in payload) {
-        resolve((payload as { results: ServerResult[] }).results);
-        return;
-      }
-
-      reject(new Error("UNEXPECTED_RESPONSE"));
-    };
-
-    xhr.send(formData);
+  const sessionRes = await fetch("/api/upload/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      guestName: guestName.trim(),
+      fileName: file.name,
+      mimeType,
+      size: file.size,
+    }),
   });
+
+  let sessionPayload: { uploadUrl?: string; name?: string; error?: string } =
+    {};
+  try {
+    sessionPayload = (await sessionRes.json()) as typeof sessionPayload;
+  } catch {
+    return [{ ok: false, name: file.name, error: "UPLOAD_FAILED" }];
+  }
+
+  const driveName = sessionPayload.name ?? file.name;
+
+  if (!sessionRes.ok) {
+    return [
+      {
+        ok: false,
+        name: driveName,
+        error: sessionPayload.error ?? "UPLOAD_FAILED",
+      },
+    ];
+  }
+
+  if (!sessionPayload.uploadUrl) {
+    return [{ ok: false, name: driveName, error: "UPLOAD_FAILED" }];
+  }
+
+  try {
+    const uploaded = await uploadFileViaResumableUrl({
+      file,
+      uploadUrl: sessionPayload.uploadUrl,
+      onProgress: (filePct) => {
+        onFileProgress(Math.min(99, filePct));
+        const loaded = (filePct / 100) * file.size;
+        const pct = ((completedBytes + loaded) / totalBytes) * 100;
+        onOverallProgress(Math.min(99, pct));
+      },
+    });
+    return [{ ok: true, id: uploaded.id, name: uploaded.name }];
+  } catch {
+    return [{ ok: false, name: driveName, error: "UPLOAD_FAILED" }];
+  }
 }
 
 function fileKey(file: File, index: number): string {
@@ -465,9 +439,7 @@ function friendlyError(code: string): string {
   const map: Record<string, string> = {
     UNSUPPORTED_TYPE:
       "serverul nu acceptă acest tip de fișier. Încearcă JPEG sau alt format obișnuit.",
-    FILE_TOO_LARGE: "fișierul depășește limita de 200 MB.",
-    REQUEST_TOO_LARGE:
-      "fișierul este prea mare pentru limita Vercel. Alege o variantă mai mică.",
+    FILE_TOO_LARGE: `fișierul depășește limita de ${humanBytes(MAX_FILE_BYTES)}.`,
     RATE_LIMITED:
       "prea multe încărcări în scurt timp. Așteaptă câteva minute și încearcă din nou.",
     UPLOAD_FAILED:

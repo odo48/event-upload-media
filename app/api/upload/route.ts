@@ -10,12 +10,11 @@ import {
 import { isAllowedMediaMime } from "@/lib/mime";
 import { buildDriveFileName, sanitizeFileName } from "@/lib/sanitizeFileName";
 import { checkUploadRateLimit, getClientIp } from "@/lib/rateLimit";
+import { MAX_FILE_BYTES } from "@/lib/uploadLimits";
 
 export const runtime = "nodejs";
 /** Allow large-but-streamed payloads on hosts that honor this (self-hosted / Pro plans). */
 export const maxDuration = 300;
-
-const MAX_BYTES = 200 * 1024 * 1024;
 
 type UploadResult =
   | { ok: true; id: string; name: string }
@@ -52,7 +51,7 @@ export async function POST(request: NextRequest) {
     await new Promise<void>((resolve, reject) => {
       const bb = busboy({
         headers: Object.fromEntries(request.headers.entries()),
-        limits: { fileSize: MAX_BYTES, files: 40 },
+        limits: { fileSize: MAX_FILE_BYTES, files: 40 },
       });
 
       let guestName = "";
